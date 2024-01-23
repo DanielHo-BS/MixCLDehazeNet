@@ -4,7 +4,7 @@ import numpy as np
 import cv2
 
 from torch.utils.data import Dataset
-from utils import hwc_to_chw, read_img
+from utils import hwc_to_chw, read_img, read_npy
 
 
 def augment(imgs=[], size=256, edge_decay=0., only_h_flip=False):
@@ -82,7 +82,9 @@ class PairLoader(Dataset):
 		if self.mode == 'valid':
 			[source_img, target_img] = align([source_img, target_img], self.size)
 
-		return {'source': hwc_to_chw(source_img), 'target': hwc_to_chw(target_img), 'filename': img_name}
+		text = read_npy(os.path.join(self.root_dir, 'text_feature', img_name).replace('jpg', 'npy').replace('png', 'npy'))
+
+		return {'source': hwc_to_chw(source_img), 'target': hwc_to_chw(target_img), 'filename': img_name, 'text': text}
 
 
 class SingleLoader(Dataset):

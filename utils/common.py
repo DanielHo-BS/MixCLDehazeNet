@@ -61,3 +61,7 @@ def hwc_to_chw(img):
 
 def chw_to_hwc(img):
 	return np.transpose(img, axes=[1, 2, 0]).copy()
+
+
+def read_npy(filename):
+	return np.load(filename)

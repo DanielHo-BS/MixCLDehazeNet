@@ -159,6 +159,19 @@ class SKFusion(nn.Module):
         return out
 
 
+class TextEmb(nn.Module):
+    def __init__(self, embed_text=512, embed_dim=24, H=256, W=256):
+        super().__init__()
+        self.weight = 0.1
+        self.proj = nn.Linear(embed_text, embed_dim*H*W)
+
+    def forward(self, x, x1):
+        x1 = self.proj(x1)
+        x1 = x1.view(x.shape[0], x.shape[1], x.shape[2], x.shape[3])
+        x = x + x1 * self.weight
+        return x
+
+
 class MixDehazeNet(nn.Module):
     def __init__(self, in_chans=3, out_chans=4,
                  embed_dims=[24, 48, 96, 48, 24],
@@ -171,6 +184,9 @@ class MixDehazeNet(nn.Module):
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
             patch_size=1, in_chans=in_chans, embed_dim=embed_dims[0], kernel_size=3)
+        
+        # text embedding
+        self.text_emb = TextEmb(embed_text=512, embed_dim=embed_dims[0], H=256, W=256)
 
         # backbone
         self.layer1 = BasicLayer(dim=embed_dims[0], depth=depths[0])
@@ -217,33 +233,34 @@ class MixDehazeNet(nn.Module):
         x = F.pad(x, (0, mod_pad_w, 0, mod_pad_h), 'reflect')
         return x
 
-    def forward_features(self, x):
-        x = self.patch_embed(x)
+    def forward_features(self, x, x1): # x(B, 3, 256, 256)
+        x = self.patch_embed(x) # x(B, 24, 256, 256)
+        x = self.text_emb(x, x1)
         x = self.layer1(x)
         skip1 = x
 
-        x = self.patch_merge1(x)
+        x = self.patch_merge1(x) # x(B, 48, 128, 128)
         x = self.layer2(x)
         skip2 = x
 
-        x = self.patch_merge2(x)
+        x = self.patch_merge2(x) # x(B, 96, 64, 64)
         x = self.layer3(x)
-        x = self.patch_split1(x)
+        x = self.patch_split1(x) # x(B, 48, 128, 128)
 
         x = self.fusion1([x, self.skip2(skip2)]) + x
         x = self.layer4(x)
-        x = self.patch_split2(x)
+        x = self.patch_split2(x) # x(B, 24, 256, 256)
 
-        x = self.fusion2([x, self.skip1(skip1)]) + x
+        x = self.fusion2([x, self.skip1(skip1)]) + x 
         x = self.layer5(x)
-        x = self.patch_unembed(x)
-        return x
+        x = self.patch_unembed(x) # x(B, 4, 256, 256)
+        return x # x(B, 4, 256, 256)
 
-    def forward(self, x):
+    def forward(self, x, x1):
         H, W = x.shape[2:]
         x = self.check_image_size(x)
 
-        feat = self.forward_features(x)
+        feat = self.forward_features(x, x1)
         # 2022/11/26
         K, B = torch.split(feat, (1, 3), dim=1)
 
