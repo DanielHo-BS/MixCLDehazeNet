@@ -21,15 +21,16 @@ parser.add_argument('--model', default='MixDehazeNet-s', type=str, help='model n
 parser.add_argument('--num_workers', default=16, type=int, help='number of workers')
 parser.add_argument('--no_autocast', action='store_false', default=True, help='disable autocast')
 parser.add_argument('--save_dir', default='./saved_models/', type=str, help='path to models saving')
-parser.add_argument('--data_dir', default='../DehazeFormer-main/data/Haze-4K/', type=str, help='path to dataset')
+parser.add_argument('--data_dir', default='../datasets/data', type=str, help='path to dataset')
 parser.add_argument('--log_dir', default='./logs/', type=str, help='path to logs')
-parser.add_argument('--dataset', default='', type=str, help='dataset name')
-parser.add_argument('--exp', default='haze4k', type=str, help='experiment setting')
-parser.add_argument('--gpu', default='3,2,0', type=str, help='GPUs used for training')
+parser.add_argument('--dataset', default='RESIDE-6K', type=str, help='dataset name')
+parser.add_argument('--exp', default='reside6k', type=str, help='experiment setting')
+parser.add_argument('--gpus', default='1', type=str, help='GPUs used for training')
 args = parser.parse_args()
 
-os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-
+#os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
+device = torch.device(f"cuda:{args.gpus}" if torch.cuda.is_available() else "cpu")
+print('==> Using device:', device)
 
 def train(train_loader, network, criterion, optimizer, scaler):
 	losses = AverageMeter()
@@ -39,11 +40,12 @@ def train(train_loader, network, criterion, optimizer, scaler):
 	network.train()
 
 	for batch in train_loader:
-		source_img = batch['source'].cuda()
-		target_img = batch['target'].cuda()
+		source_img = batch['source'].to(device)
+		target_img = batch['target'].to(device)
+		text_feature = batch['text'].squeeze(1).to(device)
 
 		with autocast(args.no_autocast):
-			output = network(source_img)
+			output = network(source_img, text_feature)
 			loss = criterion[0](output, target_img)+criterion[1](output, target_img, source_img)*0.1
 			# ablation-base
 			# loss = criterion[0](output, target_img)
@@ -67,8 +69,8 @@ def valid(val_loader, network):
 	network.eval()
 
 	for batch in val_loader:
-		source_img = batch['source'].cuda()
-		target_img = batch['target'].cuda()
+		source_img = batch['source'].to(device)
+		target_img = batch['target'].to(device)
 
 		with torch.no_grad():							# torch.no_grad() may cause warning
 			output = network(source_img).clamp_(-1, 1)		
@@ -91,13 +93,13 @@ if __name__ == '__main__':
 	# checkpoint=torch.load('./saved_models/indoor/MixDehazeNet-l-base.pth')
 	checkpoint=None
 	network = eval(args.model.replace('-', '_'))()
-	network = nn.DataParallel(network).cuda()
+	network = nn.DataParallel(network,device_ids=[int(gpu) for gpu in args.gpus.split(',')]).to(device)
 	if checkpoint is not  None:
 		network.load_state_dict(checkpoint['state_dict'])
 
 	criterion = []
 	criterion.append(nn.L1Loss())
-	criterion.append(ContrastLoss_res(ablation=False).cuda())
+	criterion.append(ContrastLoss_res(ablation=False).to(device))
 
 	if setting['optimizer'] == 'adam':
 		optimizer = torch.optim.Adam(network.parameters(), lr=setting['lr'])
@@ -169,7 +171,7 @@ if __name__ == '__main__':
 
 			if avg_psnr > best_psnr:
 				best_psnr = avg_psnr
-				print(avg_psnr)
+				print("Best PSNR: ", best_psnr, "in epoch: ", epoch)
 
 				torch.save({'state_dict': network.state_dict(),
 							'optimizer':optimizer.state_dict(),
