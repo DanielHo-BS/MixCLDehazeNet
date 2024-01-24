@@ -29,7 +29,8 @@ parser.add_argument('--gpus', default='1', type=str, help='GPUs used for trainin
 args = parser.parse_args()
 
 #os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
-device = torch.device(f"cuda:{args.gpus}" if torch.cuda.is_available() else "cpu")
+os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
+device = "cuda" if torch.cuda.is_available() else "cpu"
 print('==> Using device:', device)
 
 def train(train_loader, network, criterion, optimizer, scaler):
@@ -71,9 +72,10 @@ def valid(val_loader, network):
 	for batch in val_loader:
 		source_img = batch['source'].to(device)
 		target_img = batch['target'].to(device)
+		text_feature = batch['text'].squeeze(1).to(device)
 
 		with torch.no_grad():							# torch.no_grad() may cause warning
-			output = network(source_img).clamp_(-1, 1)		
+			output = network(source_img, text_feature).clamp_(-1, 1)		
 
 		mse_loss = F.mse_loss(output * 0.5 + 0.5, target_img * 0.5 + 0.5, reduction='none').mean((1, 2, 3))
 		psnr = 10 * torch.log10(1 / mse_loss).mean()
@@ -93,7 +95,7 @@ if __name__ == '__main__':
 	# checkpoint=torch.load('./saved_models/indoor/MixDehazeNet-l-base.pth')
 	checkpoint=None
 	network = eval(args.model.replace('-', '_'))()
-	network = nn.DataParallel(network,device_ids=[int(gpu) for gpu in args.gpus.split(',')]).to(device)
+	network = nn.DataParallel(network,device_ids=[gpu_id for gpu_id in range(len(args.gpus.split(',')))]).to(device)
 	if checkpoint is not  None:
 		network.load_state_dict(checkpoint['state_dict'])
 
