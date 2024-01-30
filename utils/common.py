@@ -64,4 +64,4 @@ def chw_to_hwc(img):
 
 
 def read_npy(filename):
-	return np.load(filename).astype(float)
+	return np.load(filename).astype('float32')
