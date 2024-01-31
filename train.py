@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from matplotlib import pyplot as plt
 from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from utils import AverageMeter
@@ -26,6 +26,7 @@ parser.add_argument('--log_dir', default='./logs/', type=str, help='path to logs
 parser.add_argument('--dataset', default='RESIDE-6K', type=str, help='dataset name')
 parser.add_argument('--exp', default='reside6k', type=str, help='experiment setting')
 parser.add_argument('--gpus', default='1', type=str, help='GPUs used for training')
+parser.add_argument('--resume', default=False, type=bool, help='resume training')
 args = parser.parse_args()
 
 #os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
@@ -91,9 +92,20 @@ if __name__ == '__main__':
 	with open(setting_filename, 'r') as f:
 		setting = json.load(f)
 
-	# pretrain weights loader
-	# checkpoint=torch.load('./saved_models/indoor/MixDehazeNet-l-base.pth')
-	checkpoint=None
+	save_dir = os.path.join(args.save_dir, args.exp)
+	os.makedirs(save_dir, exist_ok=True)
+
+	# pretrain weights loader if resume training
+	if args.resume:
+		try:
+			# load the last checkpoint from the saved models
+			checkpoint = torch.load(os.path.join(save_dir, 'last.pth'))
+		except:
+			print('==> No saved models found in the save directory')
+			exit(1)
+	else:
+		checkpoint = None
+
 	network = eval(args.model.replace('-', '_'))()
 	network = nn.DataParallel(network,device_ids=[gpu_id for gpu_id in range(len(args.gpus.split(',')))]).to(device)
 	if checkpoint is not  None:
@@ -120,11 +132,11 @@ if __name__ == '__main__':
 		scaler.load_state_dict(checkpoint['scaler'])
 		best_psnr = checkpoint['best_psnr']
 		start_epoch = checkpoint['epoch'] + 1
+		print('==> Continue training from checkpoint: ' + args.model)
+		print('==> Best PSNR = %.2f, in epoch %d' % (best_psnr, start_epoch))
 	else:
 		best_psnr = 0
 		start_epoch = 0
-
-	best_psnr = 0
 
 	dataset_dir = os.path.join(args.data_dir, args.dataset)
 	train_dataset = PairLoader(dataset_dir, 'train', 'train', 
@@ -144,14 +156,12 @@ if __name__ == '__main__':
                             num_workers=args.num_workers,
                             pin_memory=True)
 
-	save_dir = os.path.join(args.save_dir, args.exp)
-	os.makedirs(save_dir, exist_ok=True)
-
 	# if not os.path.exists(os.path.join(save_dir, args.model+'.pth')):
 	print('==> Start training, current model name: ' + args.model)
 	# print(network)
 
-	# writer = SummaryWriter(log_dir=os.path.join(args.log_dir, args.exp, args.model))
+	# Set the logger
+	writer = SummaryWriter(log_dir=os.path.join(args.log_dir, args.exp, args.model))
 
 	train_ls, test_ls, idx = [], [], []
 
@@ -161,7 +171,7 @@ if __name__ == '__main__':
 		train_ls.append(loss)
 		idx.append(epoch)
 
-		# writer.add_scalar('train_loss', loss, epoch)
+		writer.add_scalar('train_loss', loss, epoch)
 
 		scheduler.step()
 
@@ -169,12 +179,12 @@ if __name__ == '__main__':
 		if epoch % setting['eval_freq'] == 0:
 			avg_psnr = valid(val_loader, network)
 
-			# writer.add_scalar('valid_psnr', avg_psnr, epoch)
+			writer.add_scalar('valid_psnr', avg_psnr, epoch)
 
 			if avg_psnr > best_psnr:
 				best_psnr = avg_psnr
-				print("Best PSNR: ", best_psnr, "in epoch: ", epoch)
 
+				# save best weights
 				torch.save({'state_dict': network.state_dict(),
 							'optimizer':optimizer.state_dict(),
 							'lr_scheduler':scheduler.state_dict(),
@@ -182,9 +192,20 @@ if __name__ == '__main__':
 							'epoch':epoch,
 							'best_psnr':best_psnr
 							},
-						   os.path.join(save_dir, args.model+'.pth'))
+						   os.path.join(save_dir, 'best.pth'))
 
-			# writer.add_scalar('best_psnr', best_psnr, epoch)
+			writer.add_scalar('best_psnr', best_psnr, epoch)
+			tqdm.write('==> Epoch {}, PSNR={:.2f}, best PSNR={:.2f}'.format(epoch, avg_psnr, best_psnr))
+
+		# save last weights
+		torch.save({'state_dict': network.state_dict(),
+					'optimizer':optimizer.state_dict(),
+					'lr_scheduler':scheduler.state_dict(),
+					'scaler':scaler.state_dict(),
+					'epoch':epoch,
+					'best_psnr':best_psnr
+					},
+					os.path.join(save_dir, 'last.pth'))
 
 		#if ((epoch + 1) % 10) == 0:
 			#plt.plot(idx, train_ls)
