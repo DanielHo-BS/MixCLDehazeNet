@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from pytorch_msssim import ssim
 from tqdm import tqdm
 
 from utils import AverageMeter
@@ -65,6 +66,7 @@ def train(train_loader, network, criterion, optimizer, scaler):
 
 def valid(val_loader, network):
 	PSNR = AverageMeter()
+	SSIM = AverageMeter()
 
 	torch.cuda.empty_cache()
 
@@ -78,11 +80,19 @@ def valid(val_loader, network):
 		with torch.no_grad():							# torch.no_grad() may cause warning
 			output = network(source_img, text_feature).clamp_(-1, 1)		
 
-		mse_loss = F.mse_loss(output * 0.5 + 0.5, target_img * 0.5 + 0.5, reduction='none').mean((1, 2, 3))
-		psnr = 10 * torch.log10(1 / mse_loss).mean()
-		PSNR.update(psnr.item(), source_img.size(0))
+			mse_loss = F.mse_loss(output * 0.5 + 0.5, target_img * 0.5 + 0.5, reduction='none').mean((1, 2, 3))
+			psnr_val = 10 * torch.log10(1 / mse_loss).mean()
+			PSNR.update(psnr_val.item(), source_img.size(0))
 
-	return PSNR.avg
+			_, _, H, W = output.size()
+			down_ratio = max(1, round(min(H, W) / 256))
+			ssim_val = ssim(F.adaptive_avg_pool2d(output * 0.5 + 0.5, (int(H / down_ratio), int(W / down_ratio))),
+                F.adaptive_avg_pool2d(target_img * 0.5 + 0.5, (int(H / down_ratio), int(W / down_ratio))),
+                data_range=1, size_average=False).mean()
+			SSIM.update(ssim_val.item(), source_img.size(0))
+		
+
+	return {'PSNR': PSNR.avg, 'SSIM': SSIM.avg}
 
 
 if __name__ == '__main__':
@@ -177,9 +187,11 @@ if __name__ == '__main__':
 
 
 		if epoch % setting['eval_freq'] == 0:
-			avg_psnr = valid(val_loader, network)
+			avgs = valid(val_loader, network)
+			avg_psnr, avg_ssim = avgs['PSNR'], avgs['SSIM']
 
 			writer.add_scalar('valid_psnr', avg_psnr, epoch)
+			writer.add_scalar('valid_ssim', avg_ssim, epoch)
 
 			if avg_psnr > best_psnr:
 				best_psnr = avg_psnr
