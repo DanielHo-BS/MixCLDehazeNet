@@ -18,13 +18,13 @@ from models import *
 # from ptflops import get_model_complexity_info
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model', default='MixDehazeNet-l', type=str, help='model name')
+parser.add_argument('--model', default='MixDehazeNet-s', type=str, help='model name')
 parser.add_argument('--num_workers', default=16, type=int, help='number of workers')
-parser.add_argument('--data_dir', default='./data/', type=str, help='path to dataset')
+parser.add_argument('--data_dir', default='../datasets/data/', type=str, help='path to dataset')
 parser.add_argument('--save_dir', default='./saved_models/', type=str, help='path to models saving')
 parser.add_argument('--result_dir', default='./results/', type=str, help='path to results saving')
-parser.add_argument('--dataset', default='Haze-4K/', type=str, help='dataset name')
-parser.add_argument('--exp', default='haze4k', type=str, help='experiment setting')
+parser.add_argument('--dataset', default='RESIDE-6K/', type=str, help='dataset name')
+parser.add_argument('--exp', default='reside6k', type=str, help='experiment setting')
 args = parser.parse_args()
 
 
@@ -53,11 +53,12 @@ def test(test_loader, network, result_dir):
 	for idx, batch in enumerate(test_loader):
 		input = batch['source'].cuda()
 		target = batch['target'].cuda()
+		text_feature = batch['text'].squeeze(1).cuda()
 
 		filename = batch['filename'][0]
 
 		with torch.no_grad():
-			output = network(input).clamp_(-1, 1)
+			output = network(input, text_feature).clamp_(-1, 1)
 
 			# [-1, 1] to [0, 1]
 			output = output * 0.5 + 0.5
