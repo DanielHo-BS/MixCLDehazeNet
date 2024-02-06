@@ -1,5 +1,5 @@
 {
-    "batch_size": 32,
+    "batch_size": 64,
     "patch_size": 256,
     "valid_mode": "valid",
     "edge_decay": 0,
@@ -7,5 +7,5 @@
     "optimizer": "adamw",
     "lr": 1e-4,
     "epochs":1000,
-    "eval_freq": 10
+    "eval_freq": 1
 }
