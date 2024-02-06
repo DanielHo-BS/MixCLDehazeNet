@@ -60,6 +60,17 @@ CLIP (Contrastive Language-Image Pre-Training) is a neural network trained on a 
 >**Framework**:
 ![image](https://github.com/openai/CLIP/blob/main/CLIP.png?raw=true)
 
+### CALIP: Zero-Shot Enhancement of CLIP with Parameter-free Attention
+
+[[Paper]](https://ojs.aaai.org/index.php/AAAI/article/view/25152)
+[[Github]](https://github.com/ZiyuGuo99/CALIP)
+
+>**Abstract:**
+CALIP is a free-lunch enhancement method to boost CLIP’s zero-shot performance via a parameter-free Attention module. Specifically, we guide visual and textual representations to interact with each other and explore cross-modal informative features via attention. As the pre-training has largely reduced the embedding distances between two modalities, we discard all learnable parameters in the attention and bidirectionally update the multi-modal features, enabling the whole process to be parameter-free and training-free. In this way, the images are blended with textual-aware signals and the text representations become visual-guided for better adaptive zeroshot alignment. We evaluate CALIP on various benchmarks of 14 datasets for both 2D image and 3D point cloud few-shot classification, showing consistent zero-shot performance improvement over CLIP. Based on that, we further insert a small number of linear layers in CALIP’s attention module and verify our robustness under the few-shot settings, which also achieves leading performance compared to existing methods.
+
+>**Framework**:
+![image](https://github.com/ZiyuGuo99/CALIP/raw/main/calip.png)
+
 ## Citation
 Useful paper for my research:
 
@@ -82,3 +93,11 @@ Useful paper for my research:
       primaryClass={cs.CV}
 }
 ```
+
+```bibtex
+@article{guo2022calip,
+  title={Calip: Zero-shot enhancement of clip with parameter-free attention},
+  author={Guo, Ziyu and Zhang, Renrui and Qiu, Longtian and Ma, Xianzheng and Miao, Xupeng and He, Xuming and Cui, Bin},
+  journal={arXiv preprint arXiv:2209.14169},
+  year={2022}
+}```
