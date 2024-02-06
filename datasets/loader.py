@@ -79,7 +79,7 @@ class PairLoader(Dataset):
 		if self.mode == 'train':
 			[source_img, target_img] = augment([source_img, target_img], self.size, self.edge_decay, self.only_h_flip)
 
-		if self.mode == 'valid' or self.mode == 'test':
+		if self.mode == 'valid':
 			[source_img, target_img] = align([source_img, target_img], self.size)
 
 		text = read_npy(os.path.join(self.root_dir, 'text_feature', img_name).replace('jpg', 'npy').replace('png', 'npy'))

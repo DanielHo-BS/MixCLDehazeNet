@@ -172,6 +172,46 @@ class TextEmb(nn.Module):
         return x
 
 
+class CrossModalAttention(nn.Module):
+    def __init__(self):
+        super(CrossModalAttention, self).__init__()
+
+    def forward(self, F_s, F_t):
+        # F_s ∈ R^{HW×C}
+        # F_t ∈ R^{K×C}
+        B,C,H,W = F_s.shape
+        # transpose F_s from C×H×W to H×W×C
+        F_s_t = F_s.permute(0, 2, 3, 1)
+        _, _, dim_t = F_t.shape
+        # reshape F_s into a 1D vector sequence
+        F_s_t = F_s_t.contiguous().view(B, -1, dim_t)
+
+        # A denotes the cross-modal attention map
+        # A ∈ R^{HW×K}
+        A = torch.matmul(F_s_t, F_t.permute(0,2,1))
+        # scale A
+        A = A / (A.shape[-1] ** 0.5)
+
+        #  bidirectionally update both textual and visual features
+        #  F_s' = softmax(A)F_t^T
+        #  F_t' = softmax(A^T)F_s
+
+        A = F.softmax(A, dim=-1)
+
+        # update F_t by adding the cross-modal attention
+        F_t_updated = torch.matmul(A.permute(0, 2, 1), F_s_t)
+
+        # update F_s_t by adding the cross-modal attention
+        F_s_t_update = torch.matmul(A, F_t)
+        # reshape F_s_t_update into a 3D tensor
+        F_s_t_update = F_s_t_update.view(B, H, W, C)
+        # transpose F_s_t_update from H×W×C to C×H×W
+        F_s_t_update = F_s_t_update.permute(0, 3, 1, 2).contiguous()
+        # F_s = F_s + F_s_t_update
+        F_s_updated = F_s + F_s_t_update
+
+        return F_s_updated , F_t_updated
+
 class MixDehazeNet(nn.Module):
     def __init__(self, in_chans=3, out_chans=4,
                  embed_dims=[24, 48, 96, 48, 24],
@@ -186,7 +226,8 @@ class MixDehazeNet(nn.Module):
             patch_size=1, in_chans=in_chans, embed_dim=embed_dims[0], kernel_size=3)
         
         # text embedding
-        self.text_emb = TextEmb(embed_text=512, embed_dim=embed_dims[0], H=256, W=256)
+        # self.text_emb1 = TextEmb(embed_text=512, embed_dim=embed_dims[0], H=256, W=256)
+        self.text_emb = CrossModalAttention()
 
         # backbone
         self.layer1 = BasicLayer(dim=embed_dims[0], depth=depths[0])
@@ -234,8 +275,8 @@ class MixDehazeNet(nn.Module):
         return x
 
     def forward_features(self, x, x1): # x(B, 3, 256, 256)
+        x, x1 = self.text_emb(x, x1)
         x = self.patch_embed(x) # x(B, 24, 256, 256)
-        x = self.text_emb(x, x1)
         x = self.layer1(x)
         skip1 = x
 

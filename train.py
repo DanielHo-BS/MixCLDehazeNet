@@ -45,7 +45,7 @@ def train(train_loader, network, criterion, optimizer, scaler):
 	for batch in train_loader:
 		source_img = batch['source'].to(device)
 		target_img = batch['target'].to(device)
-		text_feature = batch['text'].squeeze(1).to(device)
+		text_feature = batch['text'].to(device)
 
 		with autocast(args.no_autocast):
 			output = network(source_img, text_feature)
@@ -75,7 +75,7 @@ def valid(val_loader, network):
 	for batch in val_loader:
 		source_img = batch['source'].to(device)
 		target_img = batch['target'].to(device)
-		text_feature = batch['text'].squeeze(1).to(device)
+		text_feature = batch['text'].to(device)
 
 		with torch.no_grad():							# torch.no_grad() may cause warning
 			output = network(source_img, text_feature).clamp_(-1, 1)		
@@ -171,7 +171,7 @@ if __name__ == '__main__':
 	# print(network)
 
 	# Set the logger
-	writer = SummaryWriter(log_dir=os.path.join(args.log_dir, args.exp, args.model))
+	writer = SummaryWriter(log_dir=os.path.join(save_dir, args.log_dir, args.exp, args.model))
 
 	train_ls, test_ls, idx = [], [], []
 
