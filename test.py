@@ -21,12 +21,16 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model', default='MixDehazeNet-s', type=str, help='model name')
 parser.add_argument('--num_workers', default=16, type=int, help='number of workers')
 parser.add_argument('--data_dir', default='../datasets/data/', type=str, help='path to dataset')
-parser.add_argument('--save_dir', default='./saved_models/', type=str, help='path to models saving')
+parser.add_argument('--save_dir', default='./saved_models/crossAtten3/', type=str, help='path to models saving')
 parser.add_argument('--result_dir', default='./results/', type=str, help='path to results saving')
 parser.add_argument('--dataset', default='RESIDE-6K/', type=str, help='dataset name')
 parser.add_argument('--exp', default='reside6k', type=str, help='experiment setting')
+parser.add_argument('--gpus', default='0', type=str, help='GPUs used for training')
 args = parser.parse_args()
 
+os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print('==> Using device:', device)
 
 def single(save_dir):
 	state_dict = torch.load(save_dir)['state_dict']
@@ -51,9 +55,9 @@ def test(test_loader, network, result_dir):
 	f_result = open(os.path.join(result_dir, 'results.csv'), 'w')
 
 	for idx, batch in enumerate(test_loader):
-		input = batch['source'].cuda()
-		target = batch['target'].cuda()
-		text_feature = batch['text'].cuda()
+		input = batch['source'].to(device)
+		target = batch['target'].to(device)
+		text_feature = batch['text'].to(device)
 
 		filename = batch['filename'][0]
 
@@ -93,8 +97,8 @@ def test(test_loader, network, result_dir):
 
 if __name__ == '__main__':
 	network = eval(args.model.replace('-', '_'))()
-	network.cuda()
-	saved_model_dir = os.path.join(args.save_dir, args.exp, args.model+'.pth')
+	network.to(device)
+	saved_model_dir = os.path.join(args.save_dir, args.exp, 'best.pth')
 
 	if os.path.exists(saved_model_dir):
 		print('==> Start testing, current model name: ' + args.model)
@@ -115,7 +119,7 @@ if __name__ == '__main__':
 							 num_workers=args.num_workers,
 							 pin_memory=True)
 
-	result_dir = os.path.join(args.result_dir, args.dataset, args.model)
+	result_dir = os.path.join(args.result_dir, args.exp)
 	test(test_loader, network, result_dir)
 
 
@@ -169,8 +173,8 @@ if __name__ == '__main__':
 # 	f_result = open(os.path.join(result_dir, 'results.csv'), 'w')
 #
 # 	for idx, batch in enumerate(test_loader):
-# 		input = batch['source'].cuda()
-# 		target = batch['target'].cuda()
+# 		input = batch['source'].to(device)
+# 		target = batch['target'].to(device)
 #
 # 		filename = batch['filename'][0]
 #
@@ -211,7 +215,7 @@ if __name__ == '__main__':
 # if __name__ == '__main__':
 # 	network = eval(args.model.replace('-', '_'))()
 # 	# network = eval(network)()
-# 	network.cuda()
+# 	network.to(device)
 # 	saved_model_dir = os.path.join(args.save_dir, args.exp, args.model+'.pth')
 # 	# saved_model_dir = os.path.join(args.save_dir, args.exp, args.model + 'mutilAtten.pth')
 #
