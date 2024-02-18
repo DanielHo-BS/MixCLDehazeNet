@@ -257,6 +257,49 @@ class CrossModalAttention2(nn.Module):
         return F_s_updated , F_t_updated
 
 
+class CrossModalAttention3(nn.Module):
+    def __init__(self):
+        super(CrossModalAttention3, self).__init__()
+
+    def check_image_size(self, x):
+        # check image size: HxW should be divisible by dim_t (default: 512=2^9)
+        # if not, pad the image to make it divisible 2^(a+b)
+        # a and b are determined by the ratio of H and W
+        
+        _, _, h, w = x.size()
+        if h * w % 512 != 0:
+            a = round(9 * h / (h+w))
+            b = 9 - a
+            mod_pad_h = (2**a - h % (2**a))
+            mod_pad_w = (2**b - w % (2**b))
+            x = F.pad(x, (0, mod_pad_w, 0, mod_pad_h), 'reflect')
+        return x
+    
+    def forward(self, F_s, F_t):
+        F_s_tmp = self.check_image_size(F_s)
+        B,C,H,W = F_s.shape
+        _, _, H_tmp, W_tmp = F_s_tmp.shape
+        _, _, dim_t = F_t.shape  # F_t ∈ R^{K×C}
+        # transpose F_s from C×H×W to H×W×C, and reshape F_s into a 1D vector sequence
+        F_s_tmp = F_s_tmp.permute(0, 2, 3, 1).contiguous().view(B, -1, dim_t)  # F_s ∈ R^{HWC}
+
+        # A denotes the cross-modal attention map
+        A = torch.matmul(F_s_tmp, F_t.permute(0,2,1))  # A ∈ R^{HW×K}
+        # scale A and softmax
+        A = F.softmax(A / (A.shape[1] ** 0.5), dim=1)
+
+        # bidirectionally update both textual and visual features
+        # update F_t by adding the cross-modal attention, F_t' = softmax(A^T)F_s
+        F_t_updated = torch.matmul(A.permute(0, 2, 1), F_s_tmp)
+        # update F_s_tmp by adding the cross-modal attention, F_s' = softmax(A)F_t^T
+        F_s_tmp_update = torch.matmul(A, F_t)
+        # reshape F_s_tmp_update into a 3D tensor, and transpose F_s_tmp_update from H×W×C to C×H×W
+        F_s_tmp_update = F_s_tmp_update.view(B, H_tmp, W_tmp, C).permute(0, 3, 1, 2).contiguous()
+        F_s_updated = F_s + (1 - F_s_tmp_update[:,:,:H,:W])
+
+        return F_s_updated , F_t_updated
+
+
 class MixDehazeNet(nn.Module):
     def __init__(self, in_chans=3, out_chans=4,
                  embed_dims=[24, 48, 96, 48, 24],
