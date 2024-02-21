@@ -300,6 +300,57 @@ class CrossModalAttention3(nn.Module):
         return F_s_updated , F_t_updated
 
 
+class ParametricAttention(nn.Module):
+    def __init__(self):
+        super(ParametricAttention, self).__init__()
+        # PreProject to Q, K, V
+        self.q1 = nn.Linear(3*256*256, 512)
+        self.k1 = nn.Linear(3*256*256, 512)
+        self.v1 = nn.Linear(3*256*256, 512)
+        self.q2 = nn.Linear(512, 512)
+        self.k2 = nn.Linear(512, 512)
+        self.v2 = nn.Linear(512, 512)
+        # PostProject to F_s, F_t
+        self.postProj_s = nn.Linear(512, 3*256*256)
+        self.postProj_t = nn.Linear(512, 512)
+
+    def forward(self, F_s, F_t):
+        F_t = F_t.squeeze(1)
+        B, C, H, W = F_s.shape
+        # Resize F_s to (B,Cx256x256)
+        F_s_tmp = F.interpolate(F_s, size=(256, 256), mode='bilinear', align_corners=False)
+        F_s_tmp = F_s_tmp.view(B, -1)
+        
+        # Prepoject F_s, F_t to Q, K, V
+        Q_s = self.q1(F_s_tmp)
+        K_s = self.k1(F_s_tmp)
+        V_s = self.v1(F_s_tmp)
+        Q_t = self.q2(F_t)
+        K_t = self.k2(F_t)
+        V_t = self.v2(F_t)
+
+        # A denotes the cross-modal attention map
+        A_s = torch.matmul(Q_s, K_t.T) / (B ** 0.5)
+        A_t = torch.matmul(Q_t, K_s.T) / (B ** 0.5)
+
+        # bidirectionally update both textual and visual features
+        F_s_updated = torch.matmul(F.softmax(A_s, dim=1), V_t)
+        F_t_updated = torch.matmul(F.softmax(A_t, dim=1), V_s)
+
+        # post project to F_s, F_t
+        F_s_updated = self.postProj_s(F_s_updated)
+        F_t_updated = self.postProj_t(F_t_updated)
+
+        # reshape F_s_updated into a 3D tensor
+        F_s_updated = F_s_updated.view(B, C, 256, 256)
+        F_s_updated = F.interpolate(F_s_updated, size=(H, W), mode='bilinear', align_corners=False)
+
+        # F_s' = F_s + F_s'
+        F_s_updated = F_s + F_s_updated
+
+        return F_s_updated, F_t_updated
+
+
 class MixDehazeNet(nn.Module):
     def __init__(self, in_chans=3, out_chans=4,
                  embed_dims=[24, 48, 96, 48, 24],
@@ -316,7 +367,9 @@ class MixDehazeNet(nn.Module):
         # text embedding
         # self.text_emb1 = TextEmb(embed_text=512, embed_dim=embed_dims[0], H=256, W=256)
         # self.text_emb = CrossModalAttention()
-        self.text_emb = CrossModalAttention2()
+        # self.text_emb = CrossModalAttention2()
+        # self.text_emb = CrossModalAttention3()
+        self.text_emb = ParametricAttention()
 
         # backbone
         self.layer1 = BasicLayer(dim=embed_dims[0], depth=depths[0])
