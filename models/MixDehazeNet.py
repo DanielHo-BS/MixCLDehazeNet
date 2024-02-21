@@ -351,6 +351,48 @@ class ParametricAttention(nn.Module):
         return F_s_updated, F_t_updated
 
 
+class ParametricAttention2(nn.Module):
+    def __init__(self, channel = 24):
+        super(ParametricAttention2, self).__init__()
+        # PreProject to Q, K, V
+        self.q1 = nn.Conv2d(3, channel, 1)
+        self.k1 = nn.Conv2d(3, channel, 1)
+        self.v1 = nn.Conv2d(3, channel, 1)
+        self.q2 = nn.Conv1d(1, channel, 1)
+        self.k2 = nn.Conv1d(1, channel, 1)
+        self.v2 = nn.Conv1d(1, channel, 1)
+        # PostProject to F_s, F_t
+        self.postProj_s = nn.Conv2d(channel, 3, 1)
+        self.postProj_t = nn.Conv1d(channel, 1, 1)
+        self.channel = channel
+
+    def forward(self, F_s, F_t):
+        B, C, H, W = F_s.shape
+        # Perform 1x1 conv to Q, K, V (HWxC & KxC)
+        Q_s = self.q1(F_s).view(B, self.channel, -1).permute(0, 2, 1)
+        K_s = self.k1(F_s).view(B, self.channel, -1).permute(0, 2, 1)
+        V_s = self.v1(F_s).view(B, self.channel, -1).permute(0, 2, 1)
+        Q_t = self.q2(F_t).permute(0, 2, 1)
+        K_t = self.k2(F_t).permute(0, 2, 1)
+        V_t = self.v2(F_t).permute(0, 2, 1)
+
+        # A denotes the cross-modal attention map
+        A_s = torch.matmul(Q_s, K_t.permute(0,2,1)) / (self.channel ** 0.5)
+        A_t = torch.matmul(Q_t, K_s.permute(0,2,1)) / (self.channel ** 0.5)
+
+        # bidirectionally update both textual and visual features
+        F_s_updated = torch.matmul(F.softmax(A_s, dim=1), V_t)
+        F_t_updated = torch.matmul(F.softmax(A_t, dim=1), V_s)
+
+        # post project to F_s, F_t
+        F_s_updated = self.postProj_s(F_s_updated.permute(0, 2, 1).view(B, self.channel, H, W))
+        F_t_updated = self.postProj_t(F_t_updated.permute(0, 2, 1))
+
+        # F_s' = F_s + F_s'
+        F_s_updated = F_s + F_s_updated
+
+        return F_s_updated, F_t_updated
+
 class MixDehazeNet(nn.Module):
     def __init__(self, in_chans=3, out_chans=4,
                  embed_dims=[24, 48, 96, 48, 24],
@@ -369,7 +411,8 @@ class MixDehazeNet(nn.Module):
         # self.text_emb = CrossModalAttention()
         # self.text_emb = CrossModalAttention2()
         # self.text_emb = CrossModalAttention3()
-        self.text_emb = ParametricAttention()
+        # self.text_emb = ParametricAttention()
+        self.text_emb = ParametricAttention2(channel=embed_dims[0])
 
         # backbone
         self.layer1 = BasicLayer(dim=embed_dims[0], depth=depths[0])
