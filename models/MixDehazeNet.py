@@ -352,51 +352,54 @@ class ParametricAttention(nn.Module):
 
 
 class ParametricAttention2(nn.Module):
-    def __init__(self, channel = 24):
+    def __init__(self, in_chans = 3, out_chans = 3, proj_dim = 3):
         super(ParametricAttention2, self).__init__()
         # PreProject to Q, K, V
-        self.q1 = nn.Conv2d(3, channel, 1)
-        self.k1 = nn.Conv2d(3, channel, 1)
-        self.v1 = nn.Conv2d(3, channel, 1)
-        self.q2 = nn.Conv1d(1, channel, 1)
-        self.k2 = nn.Conv1d(1, channel, 1)
-        self.v2 = nn.Conv1d(1, channel, 1)
+        self.q1 = nn.Conv2d(in_chans, proj_dim, 1)
+        self.k1 = nn.Conv2d(in_chans, proj_dim, 1)
+        self.v1 = nn.Conv2d(in_chans, proj_dim, 1)
+        self.q2 = nn.Conv1d(1, proj_dim, 1)
+        self.k2 = nn.Conv1d(1, proj_dim, 1)
+        self.v2 = nn.Conv1d(1, proj_dim, 1)
         # PostProject to F_s, F_t
-        self.postProj_s = nn.Conv2d(channel, 3, 1)
-        self.postProj_t = nn.Conv1d(channel, 1, 1)
-        self.channel = channel
+        self.postProj_s = nn.Conv2d(proj_dim, out_chans, 1)
+        self.postProj_t = nn.Conv1d(proj_dim, 1, 1)
+        self.proj_dim = proj_dim
 
     def forward(self, F_s, F_t):
         B, C, H, W = F_s.shape
         # Perform 1x1 conv to Q, K, V (HWxC & KxC)
-        Q_s = self.q1(F_s).view(B, self.channel, -1).permute(0, 2, 1)
-        K_s = self.k1(F_s).view(B, self.channel, -1).permute(0, 2, 1)
-        V_s = self.v1(F_s).view(B, self.channel, -1).permute(0, 2, 1)
+        Q_s = self.q1(F_s).view(B, self.proj_dim, -1).permute(0, 2, 1)
+        K_s = self.k1(F_s).view(B, self.proj_dim, -1).permute(0, 2, 1)
+        V_s = self.v1(F_s).view(B, self.proj_dim, -1).permute(0, 2, 1)
         Q_t = self.q2(F_t).permute(0, 2, 1)
         K_t = self.k2(F_t).permute(0, 2, 1)
         V_t = self.v2(F_t).permute(0, 2, 1)
 
         # A denotes the cross-modal attention map
-        A_s = torch.matmul(Q_s, K_t.permute(0,2,1)) / (self.channel ** 0.5)
-        A_t = torch.matmul(Q_t, K_s.permute(0,2,1)) / (self.channel ** 0.5)
+        A_s = torch.matmul(Q_s, K_t.permute(0,2,1)) / (self.proj_dim ** 0.5)
+        A_t = torch.matmul(Q_t, K_s.permute(0,2,1)) / (self.proj_dim ** 0.5)
 
         # bidirectionally update both textual and visual features
-        F_s_updated = torch.matmul(F.softmax(A_s, dim=1), V_t)
-        F_t_updated = torch.matmul(F.softmax(A_t, dim=1), V_s)
+        F_s_updated = torch.matmul(F.softmax(A_s, dim=-1), V_t) # tensor(B, H*W, C)
+        F_t_updated = torch.matmul(F.softmax(A_t, dim=-1), V_s) # tensor(B, 1, C)
 
         # post project to F_s, F_t
-        F_s_updated = self.postProj_s(F_s_updated.permute(0, 2, 1).view(B, self.channel, H, W))
+        F_s_updated = self.postProj_s(F_s_updated.permute(0, 2, 1).view(B, self.proj_dim, H, W))
         F_t_updated = self.postProj_t(F_t_updated.permute(0, 2, 1))
 
         # F_s' = F_s + F_s'
-        F_s_updated = F_s + F_s_updated
+        # F_s_updated = F_s + F_s_updated
+        # concatenate F_s and F_s_updated
+        F_s_updated = torch.cat([F_s, F_s_updated], dim=1)
 
         return F_s_updated, F_t_updated
 
 class MixDehazeNet(nn.Module):
     def __init__(self, in_chans=3, out_chans=4,
                  embed_dims=[24, 48, 96, 48, 24],
-                 depths=[1, 1, 2, 1, 1]):
+                 depths=[1, 1, 2, 1, 1],
+                 proj_dim=3):
         super(MixDehazeNet, self).__init__()
 
         # setting
@@ -404,7 +407,7 @@ class MixDehazeNet(nn.Module):
 
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
-            patch_size=1, in_chans=in_chans, embed_dim=embed_dims[0], kernel_size=3)
+            patch_size=1, in_chans=in_chans + in_chans, embed_dim=embed_dims[0], kernel_size=3)
         
         # text embedding
         # self.text_emb1 = TextEmb(embed_text=512, embed_dim=embed_dims[0], H=256, W=256)
@@ -412,7 +415,7 @@ class MixDehazeNet(nn.Module):
         # self.text_emb = CrossModalAttention2()
         # self.text_emb = CrossModalAttention3()
         # self.text_emb = ParametricAttention()
-        self.text_emb = ParametricAttention2(channel=embed_dims[0])
+        self.text_emb = ParametricAttention2(in_chans=in_chans, out_chans=in_chans, proj_dim=proj_dim)
 
         # backbone
         self.layer1 = BasicLayer(dim=embed_dims[0], depth=depths[0])
