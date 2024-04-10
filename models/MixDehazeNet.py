@@ -395,6 +395,27 @@ class ParametricAttention2(nn.Module):
 
         return F_s_updated, F_t_updated
 
+class SwiGLU(nn.Module):
+    def __init__(self, in_chans, out_chans):
+        super(SwiGLU, self).__init__()
+        self.w1 = nn.Conv2d(in_chans, in_chans*2, 1)
+        self.w2 = nn.Conv2d(in_chans*2, out_chans, 1)
+        self.w3 = nn.Conv2d(in_chans, in_chans*2, 1)
+        
+    def forward(self, x):
+        return self.w2(F.silu(self.w1(x)) * self.w3(x))
+    
+class GEGLU(nn.Module):
+    def __init__(self, in_chans, out_chans):
+        super(GEGLU, self).__init__()
+        hidden_dim = (in_chans * 8) // 3
+        self.w1 = nn.Conv2d(in_chans, hidden_dim, 1)
+        self.w2 = nn.Conv2d(hidden_dim, out_chans, 1)
+        self.w3 = nn.Conv2d(in_chans, hidden_dim, 1)
+        
+    def forward(self, x):
+        return self.w2(F.gelu(self.w1(x)) * self.w3(x))
+
 
 class PA_Fusion(nn.Module):
     def __init__(self, in_chans = 3, out_chans = 3, proj_dim = 3):
@@ -404,7 +425,16 @@ class PA_Fusion(nn.Module):
         self.k2 = nn.Conv1d(1, proj_dim, 1)
         self.v2 = nn.Conv1d(1, proj_dim, 1)
         # PostProject to F_s, F_t
-        self.postProj_s = nn.Conv2d(proj_dim, out_chans, 1)
+        # self.postProj_s = nn.Conv2d(proj_dim, out_chans, 1)
+        # self.postProj_s = nn.Sequential(
+        #     nn.Conv2d(proj_dim, proj_dim + 1, 1),
+        #     # nn.GELU(),
+        #     # nn.ReLU(True),
+        #     nn.LeakyReLU(0.1),
+        #     nn.Conv2d( proj_dim + 1, out_chans, 1)
+        # )
+        # self.postProj_s = SwiGLU(proj_dim, out_chans)
+        self.postProj_s = GEGLU(proj_dim, out_chans)
         self.proj_dim = proj_dim
 
     def forward(self, F_s, F_t):
