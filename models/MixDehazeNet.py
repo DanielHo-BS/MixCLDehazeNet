@@ -447,8 +447,8 @@ class MixDehazeNet(nn.Module):
         # self.text_emb = CrossModalAttention2()
         # self.text_emb = CrossModalAttention3()
         # self.text_emb = ParametricAttention()
-        # self.text_emb = ParametricAttention2(in_chans=in_chans, out_chans=self.fusion_emb, proj_dim=self.proj_dim)
-        self.text_emb = PA_Fusion(in_chans=in_chans, out_chans=self.fusion_emb, proj_dim=self.proj_dim)
+        self.text_emb = ParametricAttention2(in_chans=in_chans, out_chans=self.fusion_emb, proj_dim=self.proj_dim)
+        # self.text_emb = PA_Fusion(in_chans=in_chans, out_chans=self.fusion_emb, proj_dim=self.proj_dim)
 
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
