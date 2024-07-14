@@ -2,7 +2,7 @@
 
 Image dehazing, the task of restoring clarity to images degraded by haze, is crucial for autonomous driving, surveillance, and remote sensing. Deep learning methods have advanced this field, but their performance often degrades on mixed datasets containing diverse image domains. To tackle this challenge, we propose a novel framework that leverages weak supervision from the Contrastive Language-Image Pre-training (CLIP)\cite{ref1} model for Zero-shot and introduces a multimodal image dehazing architecture. Specifically, we refine the parameter attention mechanism from CALIP\cite{ref2} for improved image-text fusion and demonstrate the superiority of concatenation for preserving diverse information. Comprehensive experiments on the challenging RESIDE-6K\cite{ref3} mixed dehazing dataset validate the effectiveness of our method, achieving state-of-the-art performance with notably improved PSNR (31.16) and SSIM (0.977) scores.
 
-![image](./images/method.png)
+![image](./images/method.jpg)
 
 ## Introduction
    - Background
