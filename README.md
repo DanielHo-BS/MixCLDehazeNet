@@ -1,5 +1,9 @@
 # MixCLDehazeNet
 
+Image dehazing, the task of restoring clarity to images degraded by haze, is crucial for autonomous driving, surveillance, and remote sensing. Deep learning methods have advanced this field, but their performance often degrades on mixed datasets containing diverse image domains. To tackle this challenge, we propose a novel framework that leverages weak supervision from the Contrastive Language-Image Pre-training (CLIP)\cite{ref1} model for Zero-shot and introduces a multimodal image dehazing architecture. Specifically, we refine the parameter attention mechanism from CALIP\cite{ref2} for improved image-text fusion and demonstrate the superiority of concatenation for preserving diverse information. Comprehensive experiments on the challenging RESIDE-6K\cite{ref3} mixed dehazing dataset validate the effectiveness of our method, achieving state-of-the-art performance with notably improved PSNR (31.16) and SSIM (0.977) scores.
+
+![image](./images/method.png)
+
 ## Introduction
    - Background
    - Objective: Multi-modal Image Dehazing
@@ -8,18 +12,16 @@
    - A. Weakly supervised zero-shot classification using CLIP
       1. Define two domains: indoor and outdoor
       2. Utilize CLIP's pre-trained text_encoder for classification
+      3. Generate text features with the results of classification for each domain
 
-   - B. Generate text features
-      1. Use pre-trained text_encoder from CLIP
+      ![image](./images/pseudo.png)
 
-   - C. Train dehazeNet_encoder
-      1. Train a custom dehazeNet_encoder for generating image features
-
-   - D. Multi-modal feature fusion
+   - B. Multi-modal feature fusion
       1. Embed text features and image features
       2. Fuse as input features
+      3. Concatenate and feed to dehazeNet
 
-   - E. Perform multi-modal image dehazing task
+   - C. Perform multi-modal image dehazing task
       1. Use integrated features for image dehazing
 
 ## Experiments and Results
@@ -27,11 +29,41 @@
    - B. Performance evaluation
    - C. Result analysis
 
+   ![image](./images/result2-1.png)
+
 ## Conclusion
    - A. Summary
    - B. Discussion of method advantages
    - C. Future outlook
 
+
+## Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/DanielHo-BS/MixCLDehazeNet.git
+cd MixCLDehazeNet
+```
+
+```bash
+# Create a virtual environment (Optional)
+conda create -n MixCLDehazeNet python=3.7
+conda activate MixCLDehazeNet
+```
+
+```bash
+# Install the required packages
+pip install -r requirements.txt
+```
+
+```bash
+# Train the model
+./train.sh
+```
+
+## Dataset
+
+Since my code refers to [Dehazeformer](https://github.com/IDKiro/DehazeFormer#vision-transformers-for-single-image-dehazing), the dataset format is the same as that in Dehazeformer. In order to avoid errors when training the datasets, please download the datasets from [Dehazeformer](https://github.com/IDKiro/DehazeFormer#vision-transformers-for-single-image-dehazing) for training.
 
 ## Reference
 
@@ -70,34 +102,3 @@ CALIP is a free-lunch enhancement method to boost CLIP’s zero-shot performance
 
 >**Framework**:
 ![image](https://github.com/ZiyuGuo99/CALIP/raw/main/calip.png)
-
-## Citation
-Useful paper for my research:
-
-```bibtex
-@article{Mixdehazenet,
-  title={MixDehazeNet: Mix Structure Block For Image Dehazing Network},
-  author={Lu, LiPing and Xiong, Qian and Chu, DuanFeng and Xu, BingRong},
-  journal={arXiv preprint arXiv:2305.17654},
-  year={2023}
-}
-```
-
-```bibtex
-@misc{radford2021learning,
-      title={Learning Transferable Visual Models From Natural Language Supervision}, 
-      author={Alec Radford and Jong Wook Kim and Chris Hallacy and Aditya Ramesh and Gabriel Goh and Sandhini Agarwal and Girish Sastry and Amanda Askell and Pamela Mishkin and Jack Clark and Gretchen Krueger and Ilya Sutskever},
-      year={2021},
-      eprint={2103.00020},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV}
-}
-```
-
-```bibtex
-@article{guo2022calip,
-  title={Calip: Zero-shot enhancement of clip with parameter-free attention},
-  author={Guo, Ziyu and Zhang, Renrui and Qiu, Longtian and Ma, Xianzheng and Miao, Xupeng and He, Xuming and Cui, Bin},
-  journal={arXiv preprint arXiv:2209.14169},
-  year={2022}
-}```
