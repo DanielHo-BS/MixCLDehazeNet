@@ -5,6 +5,7 @@ import os
 import PIL
 import torch
 import time
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 
@@ -45,7 +46,18 @@ def save_text_feature(result, image_paths):
 
     return values / len(image_paths)
 
-
+def plot_result(result, images, classTest):
+    # plot the images with title of the predicted class
+    fig, ax = plt.subplots(2, 5, figsize=(20, 8))
+    offset = 10 * 300
+    for i in range(10):
+        value, index = result['similarity'][offset+i].topk(1)
+        ax[i//5, i%5].imshow(images[offset+i])
+        ax[i//5, i%5].set_title(f"Predicted: {classTest[index]}")
+        ax[i//5, i%5].axis('off')
+    # save the plot
+    plt.tight_layout()
+    plt.savefig('result.png')
 
 def main(args):
     # Prepare the inputs
@@ -75,10 +87,12 @@ def main(args):
     print('time cost: ', time_end - time_start)
     print('--------end zero-shot classification--------')
 
-
     # Save text feature
     average = save_text_feature(result, image_paths)
     print('average similarity: ', average)
+
+    # Plot the result
+    # plot_result(result, images, classTest)
 
 
 if __name__ == '__main__':
