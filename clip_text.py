@@ -19,14 +19,15 @@ def zero_shout(gpus, images, classTest, batch_size=8, modelName='ViT-B/32'):
     model, preprocess = clip.load(modelName, device)
     
     # Encode the images and text
-    image_inputs = torch.stack([preprocess(image) for image in tqdm(images, desc="Processing images")]).to(device)
+    # image_inputs = torch.stack([preprocess(image) for image in tqdm(images, desc="Processing images")]).to(device)
     text_inputs = torch.cat([clip.tokenize(f"a photo of a {c}") for c in classTest]).to(device)
     # text_inputs = torch.cat([clip.tokenize(f"a {c.split(' ')[1]} photo of {c.split(' ')[0]}") for c in classTest]).to(device)
 
     # Zero shot classification
-    similarity = torch.zeros(len(image_inputs), len(text_inputs)).to(device)
-    for i in tqdm(range(0, len(image_inputs), batch_size), desc="Zero-shot classification"):
-        image_inputs_batch = image_inputs[i:i+batch_size]
+    similarity = torch.zeros(len(images), len(text_inputs)).to(device)
+    for i in tqdm(range(0, len(images), batch_size), desc="Zero-shot classification"):
+        image_batch = images[i:i+batch_size]
+        image_inputs_batch = torch.stack([preprocess(image) for image in image_batch]).to(device)
         with torch.no_grad():
             image_features_batch = model.encode_image(image_inputs_batch)
             text_features = model.encode_text(text_inputs)
